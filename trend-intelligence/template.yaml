@@ -1,0 +1,99 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Globals:
+  Function:
+    Timeout: 300 # 5minutes to exit the lambda
+
+Parameters:
+  Environment:
+    Type: String
+    Default: staging
+    AllowedValues:
+      - staging
+      - production
+      - experiments
+
+  CluadeApiKey:
+    Type: String
+    NoEcho: true
+
+  PerplexityApiKey:
+    Type: String
+    NoEcho: true
+
+  NewrelicAccountID:
+    Type: String
+    NoEcho: true
+
+  NewrelicLicenseKey:
+    Type: String
+    NoEcho: true
+
+  FunctionName:
+    Type: String
+    Default: trend-intelligence
+
+  LogLevel:
+    Type: String
+    Default: INFO
+
+  AwsGcpRole:
+    Type: String
+    Default: arn:aws:iam::506569801059:role/aws-lambda-gcp
+    NoEcho: true
+
+Resources:
+  trend-intelligenceDynamoDB:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "trend-intelligence-${Environment}"
+      AttributeDefinitions:
+        - AttributeName: brand_id
+          AttributeType: S
+        - AttributeName: created_at
+          AttributeType: N
+      KeySchema:
+        - AttributeName: brand_id
+          KeyType: HASH          # Partition key
+        - AttributeName: created_at
+          KeyType: RANGE         # Sort key
+      BillingMode: PAY_PER_REQUEST  # On-demand capacity mode
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: false
+
+  trend-intelligenceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${FunctionName}-${Environment}"
+      Handler: serverless.lambda_handler
+      Runtime: python3.11
+      CodeUri: .
+      MemorySize: 512
+      Role: !Ref AwsGcpRole
+      Environment:
+        Variables:
+          NEW_RELIC_ACCOUNT_ID: !Ref NewrelicAccountID
+          NEW_RELIC_LICENSE_KEY: !Ref NewrelicLicenseKey
+          NEW_RELIC_EXTENSION_SEND_FUNCTION_LOGS: true
+          NEW_RELIC_EXTENSION_LOG_LEVEL: !Ref LogLevel
+          NEW_RELIC_APP_NAME: !Sub "${FunctionName}-${Environment}"
+          NEW_RELIC_TRUSTED_ACCOUNT_KEY: !Ref NewrelicAccountID
+          NEW_RELIC_LAMBDA_HANDLER: serverless.lambda_handler
+
+          trend-intelligence_TABLE_NAME: !Sub "trend-intelligence-${Environment}"
+          CLAUDE_API_KEY: !Ref CluadeApiKey
+          PERPLEXITY_API_KEY: !Ref PerplexityApiKey
+      Events:
+        InputQueue:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt trend-intelligenceQueue.Arn
+
+      Layers:
+        - arn:aws:lambda:us-east-1:451483290750:layer:NewRelicPython311:50
+
+  trend-intelligenceQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "push-generate-trend-intelligence-${Environment}"
+      VisibilityTimeout: 310

@@ -1,0 +1,7 @@
+boto3>=1.26.0
+openai==1.76.2
+requests>=2.28.0
+google-genai==1.44.0
+pillow>=10.0.0
+pyyaml>=6.0.0
+fal_client==0.6.0
