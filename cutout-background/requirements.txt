@@ -1,0 +1,7 @@
+boto3==1.34.37
+fal_client==0.6.0
+flask==3.0.2
+python-magic==0.4.27
+pillow==10.2.0
+requests==2.31.0
+newrelic==10.14.0

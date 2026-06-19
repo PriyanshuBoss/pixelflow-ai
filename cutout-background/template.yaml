@@ -1,0 +1,74 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Globals:
+  Function:
+    Timeout: 300 # 5 minutes
+
+Parameters:
+  Environment:
+    Type: String
+    Default: staging
+    AllowedValues:
+      - staging
+      - production
+      - experiments
+
+  FalKey:
+    Type: String
+    NoEcho: true
+
+  NewrelicAccountID:
+    Type: String
+    NoEcho: true
+
+  NewrelicLicenseKey:
+    Type: String
+    NoEcho: true
+
+  FunctionName:
+    Type: String
+    Default: cutout-background
+
+  LogLevel:
+    Type: String
+    Default: INFO
+
+  AwsGcpRole:
+    Type: String
+    Default: arn:aws:iam::506569801059:role/aws-lambda-gcp
+    NoEcho: true
+
+Resources:
+  BackgroundRemovalFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${FunctionName}-${Environment}"
+      Handler: newrelic_lambda_wrapper.handler
+      Runtime: python3.11
+      CodeUri: .
+      MemorySize: 512
+      Role: !Ref AwsGcpRole
+      Environment:
+        Variables:
+          NEW_RELIC_ACCOUNT_ID: !Ref NewrelicAccountID
+          NEW_RELIC_LICENSE_KEY: !Ref NewrelicLicenseKey
+          NEW_RELIC_EXTENSION_SEND_FUNCTION_LOGS: true
+          NEW_RELIC_EXTENSION_LOG_LEVEL: !Ref LogLevel
+          NEW_RELIC_APP_NAME: !Sub "${FunctionName}-${Environment}"
+          NEW_RELIC_TRUSTED_ACCOUNT_KEY: !Ref NewrelicAccountID
+          NEW_RELIC_LAMBDA_HANDLER: serverless.lambda_handler
+          FAL_KEY: !Ref FalKey
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt BackgroundRemovalQueue.Arn
+
+      Layers:
+        - arn:aws:lambda:us-east-1:451483290750:layer:NewRelicPython311:50
+
+  BackgroundRemovalQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "cutout-background-queue-${Environment}"
+      VisibilityTimeout: 310
