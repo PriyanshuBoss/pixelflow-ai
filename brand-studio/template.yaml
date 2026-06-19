@@ -1,0 +1,112 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Globals:
+  Function:
+    Timeout: 300 # 5 minutes to exit the lambda
+
+Parameters:
+  Environment:
+    Type: String
+    Default: staging
+    AllowedValues:
+      - staging
+      - production
+      - experiments
+
+  CluadeApiKey:
+    Type: String
+    NoEcho: true
+
+  PerplexityApiKey:
+    Type: String
+    NoEcho: true
+
+  BrandFetchApiKey:
+    Type: String
+    NoEcho: true
+
+  SlackApiKey:
+    Type: String
+    NoEcho: true
+
+  GeminiApiKey:
+    Type: String
+    NoEcho: true
+
+  ApiHost:
+    Type: String
+    NoEcho: true
+
+  LambdaContentKitAutomationApiAuth:
+    Type: String
+    NoEcho: true
+
+  bucket:
+    Type: String
+    NoEcho: true
+
+  NewrelicAccountID:
+    Type: String
+    NoEcho: true
+
+  NewrelicLicenseKey:
+    Type: String
+    NoEcho: true
+    
+
+  FunctionName:
+    Type: String
+    Default: brand-studio
+
+  LogLevel:
+    Type: String
+    Default: INFO
+
+  AwsGcpRole:
+    Type: String
+    Default: arn:aws:iam::506569801059:role/aws-lambda-gcp
+    NoEcho: true
+
+Resources:
+
+  BrandKitAutomationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${FunctionName}-${Environment}"
+      Handler: newrelic_lambda_wrapper.handler
+      Runtime: python3.11
+      CodeUri: .
+      MemorySize: 512
+      Role: !Ref AwsGcpRole
+      Environment:
+        Variables:
+          NEW_RELIC_ACCOUNT_ID: !Ref NewrelicAccountID
+          NEW_RELIC_LICENSE_KEY: !Ref NewrelicLicenseKey
+          NEW_RELIC_EXTENSION_SEND_FUNCTION_LOGS: true
+          NEW_RELIC_EXTENSION_LOG_LEVEL: !Ref LogLevel
+          NEW_RELIC_APP_NAME: !Sub "${FunctionName}-${Environment}"
+          NEW_RELIC_TRUSTED_ACCOUNT_KEY: !Ref NewrelicAccountID
+          NEW_RELIC_LAMBDA_HANDLER: serverless.lambda_handler
+
+          CLAUDE_API_KEY: !Ref CluadeApiKey
+          PERPLEXITY_API_KEY: !Ref PerplexityApiKey
+          API_HOST: !Ref ApiHost
+          LAMBDA_CONTENT_KIT_AUTHOMATION_API_AUTH: !Ref LambdaContentKitAutomationApiAuth
+          BRAND_FETCH_API_KEY: !Ref BrandFetchApiKey
+          SLACK_API_KEY: !Ref SlackApiKey
+          GEMINI_API_KEY: !Ref GeminiApiKey
+          BUCKET: !Ref bucket
+      Events:
+        InputQueue:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt BrandKitAutomationQueue.Arn
+
+      Layers:
+        - arn:aws:lambda:us-east-1:451483290750:layer:NewRelicPython311:50
+
+  BrandKitAutomationQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "push-generate-brand-studio-${Environment}"
+      VisibilityTimeout: 310
